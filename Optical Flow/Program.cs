@@ -31,6 +31,7 @@ namespace Optical_Flow
             int boxSize = Int32.Parse(Console.ReadLine());
             */
             Console.WriteLine("Running");
+            //Hard Code the URL just for funsies
             VideoToBitmap.RunOnVideo(@"H:\sample.mp4");
             Console.Read();
         }
