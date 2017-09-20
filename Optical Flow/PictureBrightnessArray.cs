@@ -29,7 +29,7 @@ namespace Optical_Flow
 
             int bytes = data.Stride * height;
             int stride = data.Stride;
-            int bytesPerPixel = Bitmap.GetPixelFormatSize(bmp.PixelFormat) / 8;
+            int bytesPerPixel = Image.GetPixelFormatSize(bmp.PixelFormat) / 8;
 
             //Save it into an array so that we can unlock the bitmap and forget about it
             byte[] rgbValues = new byte[bytes];

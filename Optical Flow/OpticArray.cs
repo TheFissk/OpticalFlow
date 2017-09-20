@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,7 +10,7 @@ namespace Optical_Flow
 {
     class OpticalFlowArray
     {
-        public Vector2[,] opticflow;
+        //public Vector2[,] opticflow;
 
         public int Height { get; private set; }
         public int Width { get; private set; }
@@ -45,17 +46,45 @@ namespace Optical_Flow
                 leftBuffer = (firstFrame.width % boxSize) / 2;
                 Width = firstFrame.width / boxSize;
             }
-            opticflow = new Vector2[Height, Width];
+            //opticflow = new Vector2[Height, Width];
 
+            //Item1 = Height, Item2 = Width
+            List<Tuple<int, int>> arrs = new List<Tuple<int, int>>();
+            //var opticFlow = new List<Vector2>();
+            for (int h = 0; h < Height; h++)
+            {
+                for (int w = 0; w < Width; w++)
+                {
+                    //opticFlow.Add(findOpticVector(h * boxSize + topBuffer, w * boxSize + leftBuffer));
+                    arrs.Add(new Tuple<int, int>(h, w));
+                }
+            }
+            /*Vector2[] opticFlow = arrs
+                .AsParallel()
+                .WithDegreeOfParallelism(512)
+                .WithExecutionMode(ParallelExecutionMode.ForceParallelism)
+                .WithMergeOptions(ParallelMergeOptions.NotBuffered)
+                .AsUnordered()
+                .Select(
+                    x => findOpticVector(x.Item1 * boxSize + topBuffer, x.Item2 * boxSize + leftBuffer))
+                .ToArray();*/
 
-            Parallel.For(0, Height, yit =>
+            ConcurrentBag<Vector2> opticFlow = new ConcurrentBag<Vector2>();
+
+            OrderablePartitioner<Tuple<int, int>> op = Partitioner.Create(arrs, true);
+
+            Parallel.ForEach(op,
+                x => opticFlow.Add(findOpticVector(x.Item1 * boxSize + topBuffer, x.Item2 * boxSize + leftBuffer)));
+
+            /*Parallel.For(0, Height, yit =>
                 Parallel.For(0, Width, xit =>
                     opticflow[yit, xit] = findOpticVector(yit * boxSize + topBuffer, xit * boxSize + leftBuffer)
                 )
-            );
-            return CalculateStatistics();
+            );*///36ms
+            return CalculateStatistics(opticFlow.ToArray());
         }
 
+        /*
         // SLOW DO NOT USE
         #region threeThreadImplementation
         //rather than generating a new thread for every box, this one generates only 3 threads to be better optimized to run on a 4 thread CPU
@@ -106,7 +135,7 @@ namespace Optical_Flow
                 }
             }
         }
-        #endregion
+        #endregion*/
 
         private Vector2 findOpticVector(int top, int left)
         {
@@ -130,63 +159,60 @@ namespace Optical_Flow
             return new Vector2(Vx, Vy);
         }
 
-        private StatisticalBox CalculateStatistics()
+        private StatisticalBox CalculateStatistics(Vector2[] opticFlow)
         {
             StatisticalBox results = new StatisticalBox();
-            results.mean = Mean();
+            results.mean = Mean(opticFlow);//4ms
             //calculate the mean first, then 3 descriptive statistics
             Parallel.Invoke(
-            () => { results.Variance = Variance(results.mean); },
-            () => { results.Kurtosis = Kurtosis(results.mean); },
-            () => { results.Skewness = Skewness(results.mean); }
-            );
+            () => { results.Variance = Variance(results.mean, opticFlow); },
+            () => { results.Kurtosis = Kurtosis(results.mean, opticFlow); },
+            () => { results.Skewness = Skewness(results.mean, opticFlow); }
+            );//6ms
             return results;
         }
 
-        private double Mean()
+        private double Mean(Vector2[] vectors)
         {
             double average = 0;
-            for (int x = 0; x < Width; x++)
+            for (int i = 0; i < vectors.Length; i++)
             {
-                for (int y = 0; y < Height; y++)
-                {
-                    average += opticflow[y, x].Magnitude;
-                }
+                average += vectors[i].Magnitude;
             }
-            return average / opticflow.Length;
+            return average / vectors.Length;
         }
 
-        private double Variance(double mean)
+        private double Variance(double mean, Vector2[] opticFlow)
         {
             double sumSquared = 0;
-            foreach(Vector2 x in opticflow)
+            foreach(Vector2 x in opticFlow)
             {
                 sumSquared += x.Magnitude * x.Magnitude;
             }
-            return (sumSquared - (mean * mean * opticflow.Length * opticflow.Length) / opticflow.Length) / (opticflow.Length - 1);
+            return (sumSquared - (mean * mean * opticFlow.Length * opticFlow.Length) / opticFlow.Length) / (opticFlow.Length - 1);
         }
 
-        private double Skewness(double mean)
+        private double Skewness(double mean, Vector2[] opticFlow)
         {
             double sumSquared = 0, sumCubed = 0;
-            foreach (Vector2 x in opticflow)
+            foreach (Vector2 x in opticFlow)
             {
                 sumSquared += Math.Pow(x.Magnitude - mean, 2);
                 sumCubed += Math.Pow(x.Magnitude - mean, 3);
             }
-            double sample = (opticflow.Length * Math.Sqrt(opticflow.Length - 1)) / (opticflow.Length - 2);
+            double sample = (opticFlow.Length * Math.Sqrt(opticFlow.Length - 1)) / (opticFlow.Length - 2);
             return (sample * sumCubed) / Math.Sqrt(Math.Pow(sumSquared, 3));
         }
         
-        private double Kurtosis(double mean)
+        private double Kurtosis(double mean, Vector2[] opticFlow)
         {
             double sumSquared = 0, sumQuad = 0;
-            foreach (Vector2 x in opticflow)
+            foreach (Vector2 x in opticFlow)
             {
                 sumSquared += Math.Pow(x.Magnitude - mean, 2);
                 sumQuad += Math.Pow(x.Magnitude - mean, 4);
             }
-            double sample = (opticflow.Length * (opticflow.Length - 1) * (opticflow.Length + 1)) / ((opticflow.Length - 2) * (opticflow.Length - 3));
+            double sample = (opticFlow.Length * (opticFlow.Length - 1) * (opticFlow.Length + 1)) / ((opticFlow.Length - 2) * (opticFlow.Length - 3));
             return (sample * sumQuad) / Math.Pow(sumSquared, 2);
         }
     }
@@ -204,18 +230,12 @@ namespace Optical_Flow
     {
         public double X { get; set; }
         public double Y { get; set; }
-        public double Magnitude
-        {
-            get
-            {
-                return Math.Sqrt(X * X + Y * Y);
-            }
-        }
+        public double Magnitude => Math.Sqrt(X * X + Y * Y);
 
         public Vector2(double x, double y)
         {
-            this.X = x;
-            this.Y = y;
+            X = x;
+            Y = y;
         }
     }
 }

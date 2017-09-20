@@ -4,8 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using AForge.Video.FFMPEG;
 using System.Collections.Concurrent;
+using Accord.Video.FFMPEG;
 
 namespace Optical_Flow
 {
@@ -35,28 +35,40 @@ namespace Optical_Flow
             //Consumer Thread
             Task.Run(() =>
             {
+                int count = 0;
+                long ticks = 0;
                 //run outside of the while loop to preload the first frame
                 firstFrame = blackWhiteImages.Take();
                 //runs until there are no more frames
                 while (!blackWhiteImages.IsCompleted)
                 {
                     secondFrame = blackWhiteImages.Take();
+                    var stopwatch = new Stopwatch();
+                    stopwatch.Start();
                     if (secondFrame != null && firstFrame != null)
                     {
                         //in the future this data will be saved. for now I will ignore it.
                         OA.CalculateAverageOpticFlow(firstFrame, secondFrame, boxSize);
                     }
                     firstFrame = secondFrame;
+                    stopwatch.Stop();
+                    count++;
+                    ticks += stopwatch.ElapsedTicks;
                 }
+                Console.WriteLine($"Consumer average elapsed ticks: {ticks / count}.");
             });
 
             //Producer Thread
             Task.Run(() =>
             {
+                int count = 0;
+                long ticks = 0;
                 //for some reason ~4-5 frames from the end I was getting out of index errors so I just said fuck it and quit 10 frames early
                 //Literature implementations of this code only ran at 4 FPS, in the future I may look into allowing the user to choose a lower framerate. for now I will analyse as is.
                 for (int x = 0; x < reader.FrameCount - 10; x++)
                 {
+                    var stopwatch = new Stopwatch();
+                    stopwatch.Start();
                     try
                     {
                         blackWhiteImages.Add(new BlackAndWhiteDoubleArray(reader.ReadVideoFrame()));
@@ -67,8 +79,12 @@ namespace Optical_Flow
                         throw;
                     }
                     if (x % 200 == 0) Console.WriteLine(x);
+                    stopwatch.Stop();
+                    count++;
+                    ticks += stopwatch.ElapsedTicks;
                 }
                 blackWhiteImages.CompleteAdding();
+                Console.WriteLine($"Producer average elapsed ticks: {ticks / count}.");
             });
         }
     }
