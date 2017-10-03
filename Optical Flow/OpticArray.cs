@@ -46,28 +46,16 @@ namespace Optical_Flow
                 leftBuffer = (firstFrame.width % boxSize) / 2;
                 Width = firstFrame.width / boxSize;
             }
-            //opticflow = new Vector2[Height, Width];
 
-            //Item1 = Height, Item2 = Width
             List<Tuple<int, int>> arrs = new List<Tuple<int, int>>();
-            //var opticFlow = new List<Vector2>();
+
             for (int h = 0; h < Height; h++)
             {
                 for (int w = 0; w < Width; w++)
                 {
-                    //opticFlow.Add(findOpticVector(h * boxSize + topBuffer, w * boxSize + leftBuffer));
                     arrs.Add(new Tuple<int, int>(h, w));
                 }
             }
-            /*Vector2[] opticFlow = arrs
-                .AsParallel()
-                .WithDegreeOfParallelism(512)
-                .WithExecutionMode(ParallelExecutionMode.ForceParallelism)
-                .WithMergeOptions(ParallelMergeOptions.NotBuffered)
-                .AsUnordered()
-                .Select(
-                    x => findOpticVector(x.Item1 * boxSize + topBuffer, x.Item2 * boxSize + leftBuffer))
-                .ToArray();*/
 
             ConcurrentBag<Vector2> opticFlow = new ConcurrentBag<Vector2>();
 
@@ -76,11 +64,6 @@ namespace Optical_Flow
             Parallel.ForEach(op,
                 x => opticFlow.Add(findOpticVector(x.Item1 * boxSize + topBuffer, x.Item2 * boxSize + leftBuffer)));
 
-            /*Parallel.For(0, Height, yit =>
-                Parallel.For(0, Width, xit =>
-                    opticflow[yit, xit] = findOpticVector(yit * boxSize + topBuffer, xit * boxSize + leftBuffer)
-                )
-            );*///36ms
             return CalculateStatistics(opticFlow.ToArray());
         }
 
@@ -145,17 +128,20 @@ namespace Optical_Flow
             {
                 for (int y = top; y < top + boxSize; y++)
                 {
-                    sIx2 += (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x + 1, y]) * (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x + 1, y]);
-                    sIy2 += (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x, y + 1]) * (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x, y + 1]);
-                    sIxIy += (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x, y + 1]) * (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x + 1, y]);
-                    sIxIt += (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x + 1, y]) * (firstFrame.BrightnessArray[x, y] - secondFrame.BrightnessArray[x, y]);
-                    sIyIt += (firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x, y + 1]) * (firstFrame.BrightnessArray[x, y] - secondFrame.BrightnessArray[x, y]);
+                    double Ix = firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x + 1, y];    //difference between this pixel and the one to the right
+                    double Iy = firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x, y + 1];    //difference between and the one below it
+                    double It = firstFrame.BrightnessArray[x, y] - secondFrame.BrightnessArray[x, y];       //difference between this pixel and the same on the next frame
+                    sIx2 += Math.Pow(Ix, 2);
+                    sIy2 += Math.Pow(Iy,2);
+                    sIxIy += Ix * Iy;
+                    sIxIt += Ix * It;
+                    sIyIt += Iy * It;
                 }
             }
-            double dividable = sIy2 * sIx2 - sIxIy * sIxIy;
-            if (dividable == 0) return new Vector2(0,0);
-            double Vx = sIy2 / (sIy2 * sIx2 - sIxIy * sIxIy) * (-sIxIt) + sIxIy / (sIy2 * sIx2 - sIxIy * sIxIy) * sIyIt;
-            double Vy = sIxIy / (sIy2 * sIx2 - sIxIy * sIxIy) * sIxIt + sIx2 / (sIy2 * sIx2 - sIxIy * sIxIy) * (-sIyIt);
+            double determinant = sIy2 * sIx2 - Math.Pow(sIxIy,2);
+            if (determinant == 0) return new Vector2(0,0);
+            double Vx = (sIxIy * sIyIt - sIy2 * sIxIt) / determinant;
+            double Vy = (sIxIy * sIxIt - sIx2 * sIyIt) / determinant;
             return new Vector2(Vx, Vy);
         }
 
@@ -224,6 +210,14 @@ namespace Optical_Flow
         public double Variance { get; set; }
         public double Skewness { get; set; }
         public double Kurtosis { get; set; }
+
+        public string CSVFormat // In ({mean}, {Variance}, {skewness}, {kurtosis}) format
+        {
+            get
+            {
+                return String.Format("{0}, {1}, {2}, {3}", mean, Variance, Skewness, Kurtosis);
+            }
+        }
     }
 
     class Vector2

@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using Accord.Video.FFMPEG;
+using System.IO;
 
 namespace Optical_Flow
 {
@@ -32,6 +33,8 @@ namespace Optical_Flow
             BlockingCollection<BlackAndWhiteDoubleArray> blackWhiteImages = new BlockingCollection<BlackAndWhiteDoubleArray>(5); //Magic object that does all the consumer producer bs for me
             BlackAndWhiteDoubleArray firstFrame, secondFrame;
 
+            StreamWriter writer = new StreamWriter(@"D:\Results\results.csv");
+
             //Consumer Thread
             Task.Run(() =>
             {
@@ -48,7 +51,8 @@ namespace Optical_Flow
                     if (secondFrame != null && firstFrame != null)
                     {
                         //in the future this data will be saved. for now I will ignore it.
-                        OA.CalculateAverageOpticFlow(firstFrame, secondFrame, boxSize);
+                        var results = OA.CalculateAverageOpticFlow(firstFrame, secondFrame, boxSize);
+                        writer.WriteLine(results.CSVFormat);
                     }
                     firstFrame = secondFrame;
                     stopwatch.Stop();
@@ -61,6 +65,8 @@ namespace Optical_Flow
             //Producer Thread
             Task.Run(() =>
             {
+                var sw = new Stopwatch();
+                sw.Start();
                 int count = 0;
                 long ticks = 0;
                 //for some reason ~4-5 frames from the end I was getting out of index errors so I just said fuck it and quit 10 frames early
@@ -84,7 +90,9 @@ namespace Optical_Flow
                     ticks += stopwatch.ElapsedTicks;
                 }
                 blackWhiteImages.CompleteAdding();
+                sw.Stop();
                 Console.WriteLine($"Producer average elapsed ticks: {ticks / count}.");
+                Console.WriteLine($"Producer runtime: {sw.ElapsedMilliseconds}ms.");
             });
         }
     }
