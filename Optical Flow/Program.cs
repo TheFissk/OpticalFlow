@@ -18,7 +18,7 @@ namespace Optical_Flow
             Console.WriteLine("Running");
             //Hard Code the URL just for funsies
             var video = @"D:\sample.mp4"; //TODO: Make dynamic.
-            VideoToBitmap.RunOnVideo(video);
+            VideoToBitmap.RunOnVideo(video, 4, 8);
             Console.Read();
         }
     }
