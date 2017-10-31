@@ -12,12 +12,12 @@ namespace Optical_Flow
     {
         //public Vector2[,] opticflow;
 
-        public int Height { get; private set; }
-        public int Width { get; private set; }
-        private int leftover, topBuffer, leftBuffer, boxSize;
+        public long Height { get; private set; }
+        public long Width { get; private set; }
+        private long topBuffer, leftBuffer, boxSize;
         private BlackAndWhiteDoubleArray firstFrame, secondFrame;
 
-        public StatisticalBox CalculateAverageOpticFlow(BlackAndWhiteDoubleArray _firstFrame, BlackAndWhiteDoubleArray _secondFrame, int _boxSize)
+        public StatisticalBox CalculateAverageOpticFlow(BlackAndWhiteDoubleArray _firstFrame, BlackAndWhiteDoubleArray _secondFrame, long _boxSize)
         {
             //determine the size of the buffers on the outside of the frame and the number of iterations we need to go to
 
@@ -28,7 +28,7 @@ namespace Optical_Flow
             if (firstFrame.height % boxSize == 0)
             {
                 topBuffer = boxSize / 2;
-                Height = firstFrame.height / boxSize -1;
+                Height = firstFrame.height / boxSize - 1;
             }
             else
             {
@@ -64,7 +64,7 @@ namespace Optical_Flow
             Parallel.ForEach(op,
                 x => opticFlow.Add(findOpticVector(x.Item1 * boxSize + topBuffer, x.Item2 * boxSize + leftBuffer)));
 
-            return CalculateStatistics(opticFlow.ToArray());
+            return new StatisticalBox(opticFlow.ToArray());
         }
 
         /*
@@ -120,13 +120,13 @@ namespace Optical_Flow
         }
         #endregion*/
 
-        private Vector2 findOpticVector(int top, int left)
+        private Vector2 findOpticVector(long top, long left)
         {
             //I used the Lucas–Kanade method and while I can't explain the math concisely in a comment. I recommend either checking the documentation or wikipedia.
             double sIx2 = 0, sIy2 = 0, sIxIy = 0, sIxIt = 0, sIyIt = 0;
-            for (int x = left; x < left + boxSize; x++)
+            for (long x = left; x < left + boxSize; x++)
             {
-                for (int y = top; y < top + boxSize; y++)
+                for (long y = top; y < top + boxSize; y++)
                 {
                     double Ix = firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x + 1, y];    //difference between this pixel and the one to the right
                     double Iy = firstFrame.BrightnessArray[x, y] - firstFrame.BrightnessArray[x, y + 1];    //difference between and the one below it
@@ -144,78 +144,50 @@ namespace Optical_Flow
             double Vy = (sIxIy * sIxIt - sIx2 * sIyIt) / determinant;
             return new Vector2(Vx, Vy);
         }
-
-        private StatisticalBox CalculateStatistics(Vector2[] opticFlow)
-        {
-            StatisticalBox results = new StatisticalBox();
-            results.mean = Mean(opticFlow);//4ms
-            //calculate the mean first, then 3 descriptive statistics
-            Parallel.Invoke(
-            () => { results.Variance = Variance(results.mean, opticFlow); },
-            () => { results.Kurtosis = Kurtosis(results.mean, opticFlow); },
-            () => { results.Skewness = Skewness(results.mean, opticFlow); }
-            );//6ms
-            return results;
-        }
-
-        private double Mean(Vector2[] vectors)
-        {
-            double average = 0;
-            for (int i = 0; i < vectors.Length; i++)
-            {
-                average += vectors[i].Magnitude;
-            }
-            return average / vectors.Length;
-        }
-
-        private double Variance(double mean, Vector2[] opticFlow)
-        {
-            double sumSquared = 0;
-            foreach(Vector2 x in opticFlow)
-            {
-                sumSquared += x.Magnitude * x.Magnitude;
-            }
-            return (sumSquared - (mean * mean * opticFlow.Length * opticFlow.Length) / opticFlow.Length) / (opticFlow.Length - 1);
-        }
-
-        private double Skewness(double mean, Vector2[] opticFlow)
-        {
-            double sumSquared = 0, sumCubed = 0;
-            foreach (Vector2 x in opticFlow)
-            {
-                sumSquared += Math.Pow(x.Magnitude - mean, 2);
-                sumCubed += Math.Pow(x.Magnitude - mean, 3);
-            }
-            double sample = (opticFlow.Length * Math.Sqrt(opticFlow.Length - 1)) / (opticFlow.Length - 2);
-            return (sample * sumCubed) / Math.Sqrt(Math.Pow(sumSquared, 3));
-        }
-        
-        private double Kurtosis(double mean, Vector2[] opticFlow)
-        {
-            double sumSquared = 0, sumQuad = 0;
-            foreach (Vector2 x in opticFlow)
-            {
-                sumSquared += Math.Pow(x.Magnitude - mean, 2);
-                sumQuad += Math.Pow(x.Magnitude - mean, 4);
-            }
-            double sample = (opticFlow.Length * (opticFlow.Length - 1) * (opticFlow.Length + 1)) / ((opticFlow.Length - 2) * (opticFlow.Length - 3));
-            return (sample * sumQuad) / Math.Pow(sumSquared, 2);
-        }
     }
 
 
     class StatisticalBox
     {
-        public double mean { get; set; }
+        public double Mean { get; set; }
         public double Variance { get; set; }
         public double Skewness { get; set; }
         public double Kurtosis { get; set; }
+
+        private double sumSquared, sumCubed, sumQuad;
+
+        public StatisticalBox(Vector2[] data)
+        {
+            CalculateMean(data);
+            CalculateSums(data);
+            Variance = sumSquared / (data.Length - 1);
+            Skewness = sumCubed / (Math.Pow(Variance, 1.5f) * data.Length);
+            Kurtosis = sumQuad / (Math.Pow(Variance, 1.5f) * data.Length);
+        }
+
+        private void CalculateMean(Vector2[] data)
+        {
+            double average = 0;
+            foreach (Vector2 x in data) average += x.Magnitude;
+            Mean =  average / data.Length;
+        }
+
+        private void CalculateSums(Vector2[] data)
+        {
+            sumSquared = sumQuad = sumCubed = 0;
+            foreach (Vector2 x in data)
+            {
+                sumSquared = Math.Pow(x.Magnitude - Mean, 2);
+                sumCubed = Math.Pow(x.Magnitude - Mean, 3);
+                sumQuad = Math.Pow(x.Magnitude - Mean, 4);
+            }
+        }
 
         public string CSVFormat // In ({mean}, {Variance}, {skewness}, {kurtosis}) format
         {
             get
             {
-                return String.Format("{0}, {1}, {2}, {3}", mean, Variance, Skewness, Kurtosis);
+                return String.Format("{0}, {1}, {2}, {3}", Mean, Variance, Skewness, Kurtosis);
             }
         }
     }

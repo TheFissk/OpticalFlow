@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace Optical_Flow
 {
     //actually just a black and white image but I wasn't feeling very explicit when I named this
-    class BlackAndWhiteDoubleArray
+    public class BlackAndWhiteDoubleArray
     {
         public int height { get; }
         public int width { get; }
