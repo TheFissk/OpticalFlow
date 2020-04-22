@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Accord.Video.FFMPEG;
+﻿using Accord.Video.FFMPEG;
+using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace Optical_Flow
 {
@@ -25,6 +22,7 @@ namespace Optical_Flow
 
         public FrameProducer(string path, long desiredFramerate, long boxSize, string resultsFile)
         {
+            reader.Open(path);
             videoPath = path;
             BoxSize = boxSize;
             DesiredFramerate = desiredFramerate;
@@ -49,7 +47,7 @@ namespace Optical_Flow
                 //for some reason ~4-5 frames from the end I was getting out of index errors so I just said fuck it and quit 10 frames early
                 for (CompletedFrames = 1; CompletedFrames < reader.FrameCount - 10; CompletedFrames++)
                 {
-                    if (CompletedFrames % 200 == 0) Console.WriteLine($"OPTS: {CompletedFrames}");  //write progress to console, not required, but nice for debug
+                    //if (CompletedFrames % 200 == 0) Console.WriteLine($"OPTS: {CompletedFrames}");  //write progress to console, not required, but nice for debug
 
                     if ((int)nextFrame <= CompletedFrames)                                          //we do <= to catch any potential double fuckery
                     {
@@ -73,6 +71,7 @@ namespace Optical_Flow
                         reader.ReadVideoFrame().Dispose(); //reading and disposing of frames like this feels inefficient, but is more performant that putting the desired frame as a parameter
                     }
                 }
+                Console.WriteLine("Completed: " + videoPath);
             });
         }
     }

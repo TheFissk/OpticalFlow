@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Drawing;
+using System.Windows.Forms;
 using System.Diagnostics;
 
 
@@ -15,17 +16,23 @@ namespace Optical_Flow
 
 
 
-            Console.WriteLine("Running");
-            //Hard Code the filepath just for funsies
-            var video = @"D:\sample.mp4"; //TODO: Make dynamic.
-            VideoToBitmap.RunOnVideo(video, 4, 8);
-
-            /*
-            MainForm form = new MainForm();
-            form.ShowDialog();
-            */
+            Console.WriteLine("Hello, press anything to select the folder with which the videos to analyze are contained");
             Console.Read();
-            
+
+            OpenFileDialog fileDialog = new OpenFileDialog();
+            fileDialog.Multiselect = true;
+            if (fileDialog.ShowDialog() == DialogResult.OK)
+            {
+                foreach (string filepath in fileDialog.FileNames)
+                {
+                    new FrameProducer(filepath, 10, 10, Path.ChangeExtension(filepath,"csv")).StartAsync();
+                }
+            }
+
+            Console.ReadLine();
+            Console.ReadLine();
+            Console.ReadLine();
+            Console.ReadLine();
         }
     }
 }

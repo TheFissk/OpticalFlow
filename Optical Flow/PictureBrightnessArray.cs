@@ -13,7 +13,6 @@ namespace Optical_Flow
         public double[,] BrightnessArray { get; }
 
         //public constructor coverts RBG colour into a greyscale image
-        //does so in a single thread. This program is designed to run across 4 threads, and the OpticalFlow eats 3 of the threads
         public BlackAndWhiteDoubleArray(Bitmap bmp)
         {
             if (bmp == null) throw new NullReferenceException("Bitmap is null");
